@@ -35,5 +35,26 @@ const noteSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+history: [
+  {
+    editedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+
+    editorName: {
+      type: String,
+    },
+
+    version: {
+      type: Number,
+    },
+
+    editedAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+],
 
 module.exports = mongoose.model("Note", noteSchema);

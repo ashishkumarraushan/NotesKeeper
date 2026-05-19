@@ -33,9 +33,14 @@ function LiveNote() {
   const [isConnected, setIsConnected] = useState(socket.connected);
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [version, setVersion] = useState(0);
+  const [lastUpdated, setLastUpdated] =
+  useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [autoSaveStatus, setAutoSaveStatus] = useState("idle");
+  const [conflictMessage, setConflictMessage] =
+  useState("");
+  const [history, setHistory] = useState([]);
 
   const autoSaveTimeoutRef = useRef(null);
   const typingTimersRef = useRef({});
@@ -60,6 +65,8 @@ function LiveNote() {
     setContent(note.content || "");
     setNoteTitle(note.title || "Untitled");
     setVersion(note.version || 0);
+    setLastUpdated(note.updatedAt);
+    setHistory(note.history || []);
     setIsDirty(false);
     contentRef.current = note.content || "";
     versionRef.current = note.version || 0;
@@ -91,6 +98,9 @@ function LiveNote() {
     const nextVersion = response.data.note?.version || versionRef.current + 1;
 
     setVersion(nextVersion);
+    setLastUpdated(
+    response.data.note?.updatedAt
+    );
     setIsDirty(false);
     setAutoSaveStatus("saved");
     versionRef.current = nextVersion;
@@ -146,6 +156,8 @@ function LiveNote() {
 
       setContent(update.content || "");
       setVersion(update.version || 0);
+      setLastUpdated(update.updatedAt);
+      setHistory(update.history || []);
       setIsDirty(false);
       contentRef.current = update.content || "";
       versionRef.current = update.version || 0;
@@ -159,6 +171,8 @@ function LiveNote() {
     setContent(note.content || "");
     setNoteTitle(note.title || "Untitled");
     setVersion(note.version || 0);
+    setLastUpdated(note.updatedAt);
+    setHistory(note.history || []);
     contentRef.current = note.content || "";
     versionRef.current = note.version || 0;
     dirtyRef.current = false;
@@ -298,13 +312,29 @@ function LiveNote() {
         setTimeout(() => setAutoSaveStatus("idle"), 1800);
       } catch (saveError) {
         if (saveError.response?.status === 409) {
-          setAutoSaveStatus("conflict");
-          await fetchNote();
-        } else {
-          setAutoSaveStatus("error");
-        }
 
-        setTimeout(() => setAutoSaveStatus("idle"), 2500);
+      setConflictMessage(
+      "This note was updated by another user."
+    );
+
+    setAutoSaveStatus("conflict");
+
+     await fetchNote();
+
+    setTimeout(() => {
+
+    setConflictMessage("");
+
+    setAutoSaveStatus("idle");
+
+  }, 4000);
+
+} else {
+
+    setAutoSaveStatus("error");
+}
+
+        
       }
     }, 1200);
 
@@ -321,8 +351,8 @@ function LiveNote() {
       setAutoSaveStatus("error");
     } finally {
       navigate("/dashboard");
-    }
-  };
+     }
+   };
 
   const handleChange = (event) => {
     const value = event.target.value;
@@ -414,6 +444,15 @@ function LiveNote() {
               <div className="inline-flex h-10 items-center rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm font-bold text-slate-600 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-300">
                 Version {version}
               </div>
+              <div className="inline-flex h-10 items-center rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm font-bold text-slate-600 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-300">
+
+            Updated:
+             {" "}
+            {lastUpdated
+            ? new Date(lastUpdated).toLocaleTimeString()
+              : "--"}
+
+            </div>
 
               <div className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm font-bold text-slate-600 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-300">
                 {autoSaveStatus === "saving" && (
@@ -448,6 +487,15 @@ function LiveNote() {
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
           <main className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900 sm:p-6">
+            {conflictMessage && (
+
+          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
+
+           {conflictMessage}
+
+         </div>
+
+          )}
             {typingNames.length > 0 && (
               <div className="mb-4 rounded-lg border border-sky-100 bg-sky-50 px-4 py-3 text-sm font-bold text-sky-700 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300">
                 {typingNames.join(", ")} {typingNames.length === 1 ? "is" : "are"} typing...
@@ -496,38 +544,86 @@ function LiveNote() {
               </div>
             </section>
 
-            <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-              <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-600 dark:text-gray-300">
-                Room activity
-              </h2>
+             <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+  <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-600 dark:text-gray-300">
+    Room activity
+  </h2>
 
-              {presenceEvents.length > 0 ? (
-                <div className="space-y-2">
-                  {presenceEvents.map((event) => (
-                    <div
-                      key={event.id}
-                      className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold ${
-                        event.type === "joined"
-                          ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
-                          : "bg-slate-100 text-slate-600 dark:bg-gray-800 dark:text-gray-300"
-                      }`}
-                    >
-                      {event.type === "joined" ? (
-                        <UserPlus size={15} />
-                      ) : (
-                        <UserMinus size={15} />
-                      )}
-                      {event.userName} {event.type === "joined" ? "joined" : "left"}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm font-medium leading-6 text-slate-500 dark:text-gray-400">
-                  Join and leave events appear here while collaborators move through the room.
-                </p>
-              )}
-            </section>
-          </aside>
+  {presenceEvents.length > 0 ? (
+    <div className="space-y-2">
+      {presenceEvents.map((event) => (
+        <div
+          key={event.id}
+          className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold ${
+            event.type === "joined"
+              ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+              : "bg-slate-100 text-slate-600 dark:bg-gray-800 dark:text-gray-300"
+          }`}
+        >
+          {event.type === "joined" ? (
+            <UserPlus size={15} />
+          ) : (
+            <UserMinus size={15} />
+          )}
+
+          {event.userName} {event.type === "joined" ? "joined" : "left"}
+         </div>
+       ))}
+        </div>
+      ) : (
+    <p className="text-sm font-medium leading-6 text-slate-500 dark:text-gray-400">
+      Join and leave events appear here while collaborators move through the room.
+    </p>
+     )}
+    </section>
+              <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+
+  <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-600 dark:text-gray-300">
+    Change History
+  </h2>
+
+  {history.length > 0 ? (
+
+    <div className="space-y-2">
+
+      {[...history]
+        .reverse()
+        .slice(0, 8)
+        .map((item, index) => (
+
+          <div
+            key={index}
+            className="rounded-lg bg-slate-50 px-3 py-2 text-sm dark:bg-gray-950"
+          >
+
+            <p className="font-bold text-slate-700 dark:text-gray-200">
+              {item.editorName || "Unknown User"}
+            </p>
+
+            <p className="text-xs text-slate-500 dark:text-gray-400">
+              Version {item.version}
+            </p>
+
+            <p className="text-xs text-slate-500 dark:text-gray-400">
+              {new Date(item.editedAt).toLocaleString()}
+            </p>
+
+          </div>
+
+        ))}
+
+      </div>
+
+   ) : (
+
+    <p className="text-sm text-slate-500 dark:text-gray-400">
+      No edit history available.
+    </p>
+
+    )}
+
+    </section>
+             </aside>
         </div>
       </div>
     </div>
